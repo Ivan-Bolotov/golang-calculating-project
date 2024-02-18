@@ -3,12 +3,14 @@ package servers
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/Ivan-Bolotov/golang-calculating-project/pkg/functions"
 	"github.com/Knetic/govaluate"
 	"github.com/gorilla/mux"
 	"github.com/joho/godotenv"
 	"io"
 	"log"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -25,12 +27,18 @@ type StringExpression struct {
 	String string `json:"expression"`
 }
 
+type ExpressionResult struct {
+	Id     int         `json:"id"`
+	Result interface{} `json:"result"`
+}
+
 type Server struct {
-	id                 int
-	Port               int `json:"port"`
-	AmountOfGoroutines int `json:"amount"`
-	state              string
-	lastPing           time.Time
+	id                  int
+	Port                int `json:"port"`
+	AmountOfGoroutines  int `json:"amount"`
+	state               string
+	lastPing            time.Time
+	countingExpressions []int
 }
 
 func (s *Server) Ping() {
@@ -48,9 +56,24 @@ func (s *Server) Ping() {
 	s.state = "active"
 }
 
-func (s *Server) Send(data []byte) bool {
+func (s *Server) SendOperationTime(data []byte) bool {
 	client := &http.Client{}
 	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("http://127.0.0.1:%d/set_operation_time", s.Port), strings.NewReader(string(data)))
+	if err != nil {
+		log.Fatal(err)
+	}
+	resp, err := client.Do(req)
+	s.lastPing = time.Now()
+	if err != nil || resp.StatusCode != http.StatusOK {
+		s.state = "inactive"
+		return false
+	}
+	return true
+}
+
+func (s *Server) SendExpression(data []byte) bool {
+	client := &http.Client{}
+	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("http://127.0.0.1:%d/expression", s.Port), strings.NewReader(string(data)))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -92,7 +115,7 @@ func setRoutesForStorage(handler *mux.Router) {
 		if r.Method == http.MethodGet {
 			vars := mux.Vars(r)
 			id, err := strconv.Atoi(vars["id"])
-			if err != nil || id >= len(expressions) {
+			if err != nil || id >= len(expressions) || id < 0 {
 				fmt.Fprintln(w, "not valid id.")
 				return
 			}
@@ -128,7 +151,7 @@ func setRoutesForStorage(handler *mux.Router) {
 					result: nil,
 				}
 				if !isValidExpression(expression) {
-					fmt.Fprintln(w, "not valid expression.")
+					fmt.Fprintln(w, "invalid expression.")
 					return
 				}
 				if !isUniqueExpression(expressions, expression) {
@@ -136,6 +159,20 @@ func setRoutesForStorage(handler *mux.Router) {
 					return
 				}
 				expressions = append(expressions, expression)
+
+				var lensOfCountingExpressionsSlices []int
+				for _, server := range computingResources {
+					server.Ping()
+					if server.state == "active" {
+						lensOfCountingExpressionsSlices = append(lensOfCountingExpressionsSlices, len(server.countingExpressions))
+					}
+				}
+				m, _ := functions.MinMax(lensOfCountingExpressionsSlices)
+				for _, server := range computingResources {
+					if server.state == "active" && len(server.countingExpressions) == m {
+						server.SendExpression([]byte(fmt.Sprintf(`{"id": %d, "expression": "%s"}`, expression.id, expression.exp)))
+					}
+				}
 				var dict = map[string]interface{}{
 					"id":    expression.id,
 					"state": expression.state,
@@ -193,7 +230,7 @@ func setRoutesForStorage(handler *mux.Router) {
 				for _, server := range computingResources {
 					server.Ping()
 					if server.state == "active" {
-						server.Send(res)
+						server.SendOperationTime(res)
 					}
 				}
 				fmt.Fprintln(w, "ok.")
@@ -223,6 +260,28 @@ func setRoutesForStorage(handler *mux.Router) {
 				fmt.Fprintln(w, string(data))
 				// TODO: добавляем новый сервак
 			}
+		case "result":
+			if r.Method == http.MethodPost {
+				var expResult ExpressionResult
+				res, _ := io.ReadAll(r.Body)
+				err := json.Unmarshal(res, &expResult)
+				if err != nil {
+					panic(err)
+				}
+				expressions[expResult.Id].result = expResult.Result
+				expressions[expResult.Id].state = "resolved"
+				for _, server := range computingResources {
+					if slices.Contains(server.countingExpressions, expResult.Id) {
+						for i, val := range server.countingExpressions {
+							if val == expResult.Id {
+								server.countingExpressions = append(server.countingExpressions[:i], server.countingExpressions[i+1:]...)
+							}
+						}
+					}
+				}
+				fmt.Fprintln(w, "ok.")
+				// TODO: изменение данных в БД
+			}
 		}
 	})
 }
@@ -234,7 +293,8 @@ func isValidExpression(expression Expression) bool {
 	} else if strings.Contains(expression.exp, "**") ||
 		strings.Contains(expression.exp, "%") ||
 		strings.Contains(expression.exp, "|") ||
-		strings.Contains(expression.exp, ",") {
+		strings.Contains(expression.exp, ",") ||
+		strings.Contains(expression.exp, "/0") {
 		return false
 	} else if _, err = strconv.Atoi(expression.exp); err == nil {
 		return false
