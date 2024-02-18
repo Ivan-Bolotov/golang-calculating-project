@@ -131,6 +131,10 @@ func setRoutesForStorage(handler *mux.Router) {
 					fmt.Fprintln(w, "not valid expression.")
 					return
 				}
+				if !isUniqueExpression(expressions, expression) {
+					fmt.Fprintln(w, "not unique expression.")
+					return
+				}
 				expressions = append(expressions, expression)
 				var dict = map[string]interface{}{
 					"id":    expression.id,
@@ -236,6 +240,15 @@ func isValidExpression(expression Expression) bool {
 		return false
 	} else if _, err = strconv.ParseFloat(expression.exp, 64); err == nil {
 		return false
+	}
+	return true
+}
+
+func isUniqueExpression(expressions []Expression, expression Expression) bool {
+	for _, exp := range expressions {
+		if exp.exp == expression.exp {
+			return false
+		}
 	}
 	return true
 }
