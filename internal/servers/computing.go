@@ -1,14 +1,23 @@
 package servers
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/gorilla/mux"
 	"github.com/joho/godotenv"
 	"io"
 	"log"
+	"math"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
+	"time"
+)
+
+var (
+	operandsList = []string{"+", "-", "/", "*"}
+	operandsMap  = map[string]time.Duration{"+": 0, "-": 0, "/": 0, "*": 0}
 )
 
 func StartNewHttpComputingServer(port int) {
@@ -55,6 +64,21 @@ func setRoutesForComputing(handler *mux.Router) {
 	handler.HandleFunc("/ping", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet {
 			return
+		}
+	})
+	handler.HandleFunc("/set_operation_time", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			var data = map[string]int{}
+			res, _ := io.ReadAll(r.Body)
+			err := json.Unmarshal(res, &data)
+			if err != nil {
+				panic(err)
+			}
+			for key, value := range data {
+				if slices.Contains(operandsList, key) {
+					operandsMap[key] = time.Duration(value * int(math.Pow(10, 9)))
+				}
+			}
 		}
 	})
 }

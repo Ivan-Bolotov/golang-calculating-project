@@ -48,6 +48,21 @@ func (s *Server) Ping() {
 	s.state = "active"
 }
 
+func (s *Server) Send(data []byte) bool {
+	client := &http.Client{}
+	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("http://127.0.0.1:%d/set_operation_time", s.Port), strings.NewReader(string(data)))
+	if err != nil {
+		log.Fatal(err)
+	}
+	resp, err := client.Do(req)
+	s.lastPing = time.Now()
+	if err != nil || resp.StatusCode != http.StatusOK {
+		s.state = "inactive"
+		return false
+	}
+	return true
+}
+
 var (
 	expressions        []Expression
 	computingResources []Server
@@ -171,9 +186,14 @@ func setRoutesForStorage(handler *mux.Router) {
 		case "set_operation_time":
 			if r.Method == http.MethodPost {
 				res, _ := io.ReadAll(r.Body)
-				body := string(res)
-				fmt.Println(body)
-				// TODO: Доделать!!!
+				for _, server := range computingResources {
+					server.Ping()
+					if server.state == "active" {
+						server.Send(res)
+					}
+				}
+				fmt.Fprintln(w, "ok.")
+				// TODO: Доделать!!! [ DONE ]
 				// TODO: отправляем на сервера-вычислители время выполнения данного вычисления
 			}
 		case "add_server":
@@ -197,7 +217,7 @@ func setRoutesForStorage(handler *mux.Router) {
 					panic(err)
 				}
 				fmt.Fprintln(w, string(data))
-				// TODO: добавляем сновый сервак
+				// TODO: добавляем новый сервак
 			}
 		}
 	})
