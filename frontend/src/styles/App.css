@@ -1,0 +1,43 @@
+.Header {
+    display: flex;
+    background-color: teal;
+    justify-content: space-between;
+    /*box-shadow: 0 0 3px 3px darkgray;*/
+}
+
+.Panel {
+    display: flex;
+    margin-right: 12px;
+    margin-left: 12px;
+    justify-content: flex-start;
+    border-bottom: 2px solid gainsboro;
+}
+
+.Main {
+    flex-direction: column;
+    display: flex;
+    margin: 20px;
+    justify-content: flex-start;
+}
+
+.label {
+    color: white;
+    font-family: Arial, serif;
+    margin: 15px;
+    font-weight: normal;
+}
+
+.btn {
+    padding: 12px;
+    background: white;
+    border: none;
+    color: dimgray;
+}
+
+.item {
+    border: 1px solid gray;
+    padding: 15px;
+    margin: 10px;
+    border-radius: 5px;
+    background: lightgray;
+}
