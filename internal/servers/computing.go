@@ -67,7 +67,8 @@ func StartNewHttpComputingServer(port int) {
 	}
 	// читаем тело ответа
 	body, err := io.ReadAll(resp.Body)
-	log.Println(fmt.Sprintf("New computing server started on port: %d with %s and %d goroutines", port, string(body), amount))
+	log.Println(fmt.Sprintf("New computing server started on port: %d with %s and %d goroutines",
+		port, strings.Trim(string(body), "\n"), amount))
 
 	if err = server.ListenAndServe(); err != nil {
 		log.Fatal("Failed to start server")
