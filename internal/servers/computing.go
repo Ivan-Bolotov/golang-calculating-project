@@ -43,8 +43,6 @@ func StartNewHttpComputingServer(port int) {
 		log.Fatal("Port in .env file must be integer")
 	}
 
-	fmt.Printf("%d goroutines required.\n", amount)
-
 	// создаём WorkerPool
 	workerPool = workerpool.New(amount, worker)
 
@@ -56,7 +54,10 @@ func StartNewHttpComputingServer(port int) {
 	client := &http.Client{}
 
 	// даём о себе знать главному серверу
-	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("http://127.0.0.1:%d/add_server", rootServerPort), strings.NewReader(fmt.Sprintf(`{"port": %d, "amount": %d}`, port, amount)))
+	req, err := http.NewRequest(
+		http.MethodPost, fmt.Sprintf("http://127.0.0.1:%d/add_server", rootServerPort),
+		strings.NewReader(fmt.Sprintf(`{"port": %d, "amount": %d}`, port, amount)),
+	)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -66,7 +67,7 @@ func StartNewHttpComputingServer(port int) {
 	}
 	// читаем тело ответа
 	body, err := io.ReadAll(resp.Body)
-	fmt.Println(string(body))
+	log.Println(fmt.Sprintf("New computing server started on port: %d with %s and %d goroutines", port, string(body), amount))
 
 	if err = server.ListenAndServe(); err != nil {
 		log.Fatal("Failed to start server")

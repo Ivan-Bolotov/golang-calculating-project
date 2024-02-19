@@ -1,12 +1,12 @@
 package workerpool
 
-// Pool Пул для выполнения
+// Pool - пул для выполнения
 type Pool struct {
 	// из этого канала будем брать выражения
 	expressions chan map[string]interface{}
 }
 
-// New при создании пула передадим максимальное количество горутин и функция-обработчик
+// New при создании пула передаётся максимальное количество горутин и функция-обработчик
 func New(maxGoroutines int, worker func(map[string]interface{})) *Pool {
 	p := Pool{
 		expressions: make(chan map[string]interface{}), // канал, откуда брать выражения

@@ -97,7 +97,7 @@ func StartNewHttpStorageServer() {
 		log.Fatal("Error loading .env file")
 	}
 
-	rootServerPort, err := strconv.Atoi(envVars["ROOT_SERVER_PORT"])
+	rootServerPort, err = strconv.Atoi(envVars["ROOT_SERVER_PORT"])
 	if err != nil {
 		log.Fatal("Port in .env file must be integer")
 	}

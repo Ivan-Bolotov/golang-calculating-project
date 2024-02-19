@@ -1,5 +1,6 @@
 package functions
 
+// MinMax служит для нахождения минимального и максимального значения в слайсе []int
 func MinMax(array []int) (int, int) {
 	var maximum int = array[0]
 	var minimum int = array[0]
