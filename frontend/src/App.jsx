@@ -7,14 +7,6 @@ import Resources from "./components/Resources";
 
 function App() {
     let [current, setCurrent] = useState(1);
-    fetch("http://127.0.0.1:8080/computing_resources", {
-        method: "GET",
-        mode: 'no-cors',
-        headers: {"Accept": "application/json"}
-    }).then((res) => res.text())
-        .then((json) => {
-        console.log(json)
-    });
     return (
         <div>
             <div className="Header">

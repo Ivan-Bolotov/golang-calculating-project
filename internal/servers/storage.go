@@ -7,6 +7,7 @@ import (
 	"github.com/Knetic/govaluate"
 	"github.com/gorilla/mux"
 	"github.com/joho/godotenv"
+	"github.com/rs/cors"
 	"io"
 	"log"
 	"net/http"
@@ -104,7 +105,9 @@ func StartNewHttpStorageServer() {
 
 	muxHandler := mux.NewRouter()
 	setRoutesForStorage(muxHandler)
-	server := &http.Server{Addr: fmt.Sprintf(":%d", rootServerPort), Handler: muxHandler}
+
+	// запуск сервера с поддержкой CORS
+	server := &http.Server{Addr: fmt.Sprintf(":%d", rootServerPort), Handler: cors.AllowAll().Handler(http.Handler(muxHandler))}
 	if err := server.ListenAndServe(); err != nil {
 		log.Fatal("Failed to start server")
 	}

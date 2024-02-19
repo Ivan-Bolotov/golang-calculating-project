@@ -3,8 +3,8 @@ import "../styles/App.css"
 
 const Item = (props) => {
     return (
-        <div className="item" id={props.id}>
-            <strong>{props.text}</strong>
+        <div className="item">
+            <strong>{props.text} state: {props.state}</strong>
         </div>
     );
 };
