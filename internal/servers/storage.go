@@ -14,6 +14,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -22,6 +23,18 @@ type Expression struct {
 	exp    string
 	result interface{}
 	state  string
+}
+
+type Expressions struct {
+	array []Expression
+	mtx   sync.RWMutex
+}
+
+func (exps *Expressions) GetLength() int {
+	// чтение из expressions
+	defer exps.mtx.RUnlock()
+	exps.mtx.RLock()
+	return len(exps.array)
 }
 
 type StringExpression struct {
@@ -87,28 +100,36 @@ func (s *Server) SendExpression(data []byte) bool {
 	return true
 }
 
+//var (
+//	expressions        []Expression
+//	computingResources []Server
+//)
+
 var (
-	expressions        []Expression
+	expressions        = Expressions{}
 	computingResources []Server
 )
 
 func StartNewHttpStorageServer() {
+	// читаем файл с переменными окружения
 	envVars, err := godotenv.Read(".env")
 	if err != nil {
 		log.Fatal("Error loading .env file")
 	}
 
+	// порт главного сервера (оркестратора)
 	rootServerPort, err = strconv.Atoi(envVars["ROOT_SERVER_PORT"])
 	if err != nil {
 		log.Fatal("Port in .env file must be integer")
 	}
 
+	// настраиваем обработку запросов
 	muxHandler := mux.NewRouter()
 	setRoutesForStorage(muxHandler)
 
 	// запуск сервера с поддержкой CORS
 	server := &http.Server{Addr: fmt.Sprintf(":%d", rootServerPort), Handler: cors.AllowAll().Handler(http.Handler(muxHandler))}
-	if err := server.ListenAndServe(); err != nil {
+	if err = server.ListenAndServe(); err != nil {
 		log.Fatal("Failed to start server")
 	}
 }
@@ -118,11 +139,16 @@ func setRoutesForStorage(handler *mux.Router) {
 		if r.Method == http.MethodGet {
 			vars := mux.Vars(r)
 			id, err := strconv.Atoi(vars["id"])
-			if err != nil || id >= len(expressions) || id < 0 {
+			if err != nil || id >= expressions.GetLength() || id < 0 {
 				fmt.Fprintln(w, "not valid id.")
 				return
 			}
-			expression := expressions[id]
+
+			// чтение из expressions
+			expressions.mtx.RLock()
+			expression := expressions.array[id]
+			expressions.mtx.RUnlock()
+
 			var dict = map[string]interface{}{
 				"state": expression.state,
 				"res":   expression.result,
@@ -148,7 +174,7 @@ func setRoutesForStorage(handler *mux.Router) {
 					panic(err)
 				}
 				var expression = Expression{
-					id:     len(expressions),
+					id:     expressions.GetLength(),
 					exp:    strings.Join(strings.Split(exp.String, " "), ""),
 					state:  "pending",
 					result: nil,
@@ -157,11 +183,15 @@ func setRoutesForStorage(handler *mux.Router) {
 					fmt.Fprintln(w, "invalid expression.")
 					return
 				}
-				if !isUniqueExpression(expressions, expression) {
+				if !isUniqueExpression(&expressions, expression) {
 					fmt.Fprintln(w, "not unique expression.")
 					return
 				}
-				expressions = append(expressions, expression)
+
+				// запись в expressions
+				expressions.mtx.Lock()
+				expressions.array = append(expressions.array, expression)
+				expressions.mtx.Unlock()
 
 				var lensOfCountingExpressionsSlices []int
 				for _, server := range computingResources {
@@ -174,6 +204,7 @@ func setRoutesForStorage(handler *mux.Router) {
 				for _, server := range computingResources {
 					if server.state == "active" && len(server.countingExpressions) == m {
 						server.SendExpression([]byte(fmt.Sprintf(`{"id": %d, "expression": "%s"}`, expression.id, expression.exp)))
+						break
 					}
 				}
 				var dict = map[string]interface{}{
@@ -192,7 +223,10 @@ func setRoutesForStorage(handler *mux.Router) {
 		case "expressions":
 			if r.Method == http.MethodGet {
 				var arr []map[string]interface{}
-				for _, expression := range expressions {
+
+				// чтение из expressions
+				expressions.mtx.RLock()
+				for _, expression := range expressions.array {
 					var dict = map[string]interface{}{
 						"id":    expression.id,
 						"state": expression.state,
@@ -201,6 +235,8 @@ func setRoutesForStorage(handler *mux.Router) {
 					}
 					arr = append(arr, dict)
 				}
+				expressions.mtx.RUnlock()
+
 				data, err := json.Marshal(arr)
 				if err != nil {
 					panic(err)
@@ -271,8 +307,13 @@ func setRoutesForStorage(handler *mux.Router) {
 				if err != nil {
 					panic(err)
 				}
-				expressions[expResult.Id].result = expResult.Result
-				expressions[expResult.Id].state = "resolved"
+
+				// запись в expressions
+				expressions.mtx.Lock()
+				expressions.array[expResult.Id].result = expResult.Result
+				expressions.array[expResult.Id].state = "resolved"
+				expressions.mtx.Unlock()
+
 				for _, server := range computingResources {
 					if slices.Contains(server.countingExpressions, expResult.Id) {
 						for i, val := range server.countingExpressions {
@@ -307,11 +348,15 @@ func isValidExpression(expression Expression) bool {
 	return true
 }
 
-func isUniqueExpression(expressions []Expression, expression Expression) bool {
-	for _, exp := range expressions {
+func isUniqueExpression(expressions *Expressions, expression Expression) bool {
+	// чтение из expressions
+	expressions.mtx.RLock()
+	for _, exp := range expressions.array {
 		if exp.exp == expression.exp {
 			return false
 		}
 	}
+	expressions.mtx.RUnlock()
+
 	return true
 }
