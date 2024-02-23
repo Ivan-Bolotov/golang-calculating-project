@@ -1,21 +1,22 @@
-import React, {useState} from 'react';
-import Item from "./Item";
-import axios from "axios";
+import React, {useEffect, useState} from 'react';
+import Item from "./ResourcesItem";
+import API from "../classes/API";
 
 const Resources = (props) => {
-    let [array, setArray] = useState([])
-    async function GetComputingResources() {
-        const res = await axios.get("http://127.0.0.1:8080/computing_resources",)
-        return res.data
+    let [arr, setArr] = useState([])
+    const getData = async () => {
+        const res = await API.GetComputingResources()
+        if (res !== null) {
+            setArr(res)
+        }
     }
-    GetComputingResources().then((data) => {
-        setArray(data)
-    })
+
+    useEffect(() => {getData()}, []);
     return (
         <div className="Main">
             <h2>Сервера-вычислители:</h2>
-            {array.map((obj, id) => {
-                return <Item text={"Computer " + obj.id} state={obj.state} />
+            {arr.map((el) => {
+                return <Item key={el.id} data={el}/>
             })}
         </div>
     );

@@ -10,6 +10,7 @@ import (
 	"github.com/rs/cors"
 	"io"
 	"log"
+	"math"
 	"net/http"
 	"slices"
 	"strconv"
@@ -100,13 +101,9 @@ func (s *Server) SendExpression(data []byte) bool {
 	return true
 }
 
-//var (
-//	expressions        []Expression
-//	computingResources []Server
-//)
-
 var (
 	expressions        = Expressions{}
+	operationsTimes    = map[string]time.Duration{"+": 0, "-": 0, "/": 0, "*": 0}
 	computingResources []Server
 )
 
@@ -265,7 +262,17 @@ func setRoutesForStorage(handler *mux.Router) {
 			}
 		case "set_operation_time":
 			if r.Method == http.MethodPost {
+				var data = map[string]float64{}
 				res, _ := io.ReadAll(r.Body)
+				err := json.Unmarshal(res, &data)
+				if err != nil {
+					log.Fatal(err)
+				}
+				for key, value := range data {
+					if slices.Contains(operandsList, key) {
+						operationsTimes[key] = time.Duration(value * math.Pow(10, 9))
+					}
+				}
 				for _, server := range computingResources {
 					server.Ping()
 					if server.state == "active" {
@@ -326,11 +333,24 @@ func setRoutesForStorage(handler *mux.Router) {
 				fmt.Fprintln(w, "ok.")
 				// TODO: изменение данных в БД
 			}
+		case "operation_time":
+			if r.Method == http.MethodGet {
+				data, err := json.Marshal(operationsTimes)
+				if err != nil {
+					panic(err)
+				}
+				fmt.Fprintln(w, string(data))
+			}
 		}
 	})
 }
 
 func isValidExpression(expression Expression) bool {
+	for _, val := range strings.Split(expression.exp, "") {
+		if !strings.Contains("1234567890./*+-()", val) {
+			return false
+		}
+	}
 	_, err := govaluate.NewEvaluableExpression(expression.exp)
 	if err != nil {
 		return false
@@ -350,13 +370,13 @@ func isValidExpression(expression Expression) bool {
 
 func isUniqueExpression(expressions *Expressions, expression Expression) bool {
 	// чтение из expressions
+	defer expressions.mtx.RUnlock()
 	expressions.mtx.RLock()
 	for _, exp := range expressions.array {
 		if exp.exp == expression.exp {
 			return false
 		}
 	}
-	expressions.mtx.RUnlock()
 
 	return true
 }

@@ -83,7 +83,7 @@ func setRoutesForComputing(handler *mux.Router) {
 	})
 	handler.HandleFunc("/set_operation_time", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost {
-			var data = map[string]int{}
+			var data = map[string]float64{}
 			res, _ := io.ReadAll(r.Body)
 			err := json.Unmarshal(res, &data)
 			if err != nil {
@@ -91,7 +91,7 @@ func setRoutesForComputing(handler *mux.Router) {
 			}
 			for key, value := range data {
 				if slices.Contains(operandsList, key) {
-					operandsMap[key] = time.Duration(value * int(math.Pow(10, 9)))
+					operandsMap[key] = time.Duration(value * math.Pow(10, 9))
 				}
 			}
 			fmt.Fprintln(w, "ok.")
